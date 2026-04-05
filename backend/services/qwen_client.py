@@ -7,6 +7,7 @@ from typing import Optional
 from backend.core.browser_engine import BrowserEngine
 from backend.core.account_pool import AccountPool, Account
 from backend.core.config import settings
+from backend.services.auth_resolver import AuthResolver
 
 log = logging.getLogger("qwen2api.client")
 
@@ -14,6 +15,7 @@ class QwenClient:
     def __init__(self, engine: BrowserEngine, account_pool: AccountPool):
         self.engine = engine
         self.account_pool = account_pool
+        self.auth_resolver = AuthResolver(account_pool)
 
     async def create_chat(self, token: str, model: str) -> str:
         ts = int(time.time())
@@ -113,6 +115,8 @@ class QwenClient:
                 elif "unauthorized" in err_msg or "401" in err_msg or "403" in err_msg:
                     self.account_pool.mark_invalid(acc)
                     exclude.add(acc.email)
+                    # 触发自愈
+                    asyncio.create_task(self.auth_resolver.refresh_token(acc))
                 else:
                     # 瞬时错误，不标记死号，但排除它并重试下一个
                     exclude.add(acc.email)

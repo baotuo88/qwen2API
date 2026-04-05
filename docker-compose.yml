@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  qwen2api:
+    build: .
+    container_name: qwen2api-gateway
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/workspace/data
+      - ./logs:/workspace/logs
+    environment:
+      - ADMIN_KEY=admin
+      - PORT=8080
+      - BROWSER_POOL_SIZE=3
+      - MAX_INFLIGHT=1

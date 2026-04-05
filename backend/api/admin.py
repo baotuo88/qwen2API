@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Header
+from fastapi import APIRouter, Depends, HTTPException, Header, Request
 from pydantic import BaseModel
 from typing import List, Optional
 from backend.core.config import settings
@@ -26,7 +26,7 @@ class User(BaseModel):
     used_tokens: int
 
 @router.get("/status", dependencies=[Depends(verify_admin)])
-async def get_system_status(request):
+async def get_system_status(request: Request):
     # 这里要接入全局引擎的状态
     pool = request.app.state.account_pool
     engine = request.app.state.browser_engine
@@ -40,13 +40,13 @@ async def get_system_status(request):
     }
 
 @router.get("/users", dependencies=[Depends(verify_admin)])
-async def list_users(request):
+async def list_users(request: Request):
     db: AsyncJsonDB = request.app.state.users_db
     data = await db.get()
     return {"users": data}
 
 @router.post("/users", dependencies=[Depends(verify_admin)])
-async def create_user(user: UserCreate, request):
+async def create_user(user: UserCreate, request: Request):
     import uuid
     db: AsyncJsonDB = request.app.state.users_db
     data = await db.get()
@@ -61,18 +61,18 @@ async def create_user(user: UserCreate, request):
     return new_user
 
 @router.get("/accounts", dependencies=[Depends(verify_admin)])
-async def list_accounts(request):
+async def list_accounts(request: Request):
     pool: AccountPool = request.app.state.account_pool
     return {"accounts": [a.to_dict() for a in pool.accounts]}
 
 @router.post("/accounts", dependencies=[Depends(verify_admin)])
-async def add_account(acc: dict, request):
+async def add_account(acc: dict, request: Request):
     pool: AccountPool = request.app.state.account_pool
     await pool.add(Account(**acc))
     return {"status": "success"}
 
 @router.delete("/accounts/{email}", dependencies=[Depends(verify_admin)])
-async def delete_account(email: str, request):
+async def delete_account(email: str, request: Request):
     pool: AccountPool = request.app.state.account_pool
     await pool.remove(email)
     return {"status": "success"}

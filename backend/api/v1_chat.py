@@ -3,9 +3,10 @@ from fastapi.responses import StreamingResponse
 import asyncio
 import json
 import logging
+import uuid
 from backend.services.qwen_client import QwenClient
 from backend.services.token_calc import calculate_usage
-from backend.core.config import resolve_model
+from backend.services.tool_sieve import ToolSieve
 
 log = logging.getLogger("qwen2api.chat")
 router = APIRouter()
@@ -32,6 +33,7 @@ async def chat_completions(request: Request):
         raise HTTPException(status_code=402, detail="Quota Exceeded")
         
     body = await request.json()
+    from backend.core.config import resolve_model
     model = resolve_model(body.get("model", "gpt-3.5-turbo"))
     messages = body.get("messages", [])
     
@@ -49,18 +51,41 @@ async def chat_completions(request: Request):
         
     async def generate():
         full_text = ""
+        sieve = ToolSieve()
         try:
             for evt in events:
                 if evt.get("type") == "delta":
                     text = evt.get("content", "")
-                    full_text += text
-                    chunk = {
-                        "id": "chatcmpl-123",
-                        "object": "chat.completion.chunk",
-                        "model": model,
-                        "choices": [{"index": 0, "delta": {"content": text}, "finish_reason": None}]
-                    }
-                    yield f"data: {json.dumps(chunk)}\n\n"
+                    safe_text, tool_calls = sieve.process_delta(text)
+                    full_text += safe_text
+                    
+                    if safe_text:
+                        chunk = {
+                            "id": "chatcmpl-123",
+                            "object": "chat.completion.chunk",
+                            "model": model,
+                            "choices": [{"index": 0, "delta": {"content": safe_text}, "finish_reason": None}]
+                        }
+                        yield f"data: {json.dumps(chunk)}\n\n"
+                    
+                    for tc in tool_calls:
+                        # 转换 tool call 格式为 OpenAI 兼容
+                        tc_chunk = {
+                            "id": "chatcmpl-123",
+                            "object": "chat.completion.chunk",
+                            "model": model,
+                            "choices": [{"index": 0, "delta": {
+                                "tool_calls": [{
+                                    "id": f"call_{uuid.uuid4().hex[:8]}",
+                                    "type": "function",
+                                    "function": {
+                                        "name": tc.get("name", ""),
+                                        "arguments": json.dumps(tc.get("input", {}))
+                                    }
+                                }]
+                            }, "finish_reason": "tool_calls"}]
+                        }
+                        yield f"data: {json.dumps(tc_chunk)}\n\n"
                     
             # 扣费统计
             usage = calculate_usage(content, full_text)

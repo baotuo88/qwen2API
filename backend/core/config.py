@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     # 数据文件路径
     ACCOUNTS_FILE: str = os.getenv("ACCOUNTS_FILE", "data/accounts.json")
     USERS_FILE: str = os.getenv("USERS_FILE", "data/users.json")
+    CAPTURES_FILE: str = os.getenv("CAPTURES_FILE", "data/captures.json")
     CONFIG_FILE: str = os.getenv("CONFIG_FILE", "data/config.json")
     
     class Config:

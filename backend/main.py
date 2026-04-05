@@ -8,7 +8,8 @@ from backend.core.database import AsyncJsonDB
 from backend.core.browser_engine import BrowserEngine
 from backend.core.account_pool import AccountPool
 from backend.services.qwen_client import QwenClient
-from backend.api import admin, v1_chat
+from backend.api import admin, v1_chat, probes, anthropic, gemini, embeddings
+from backend.services.garbage_collector import garbage_collect_chats
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger("qwen2api")
@@ -20,6 +21,7 @@ async def lifespan(app: FastAPI):
     # 初始化数据存储 (带锁 JSON)
     app.state.accounts_db = AsyncJsonDB(settings.ACCOUNTS_FILE, default_data=[])
     app.state.users_db = AsyncJsonDB(settings.USERS_FILE, default_data=[])
+    app.state.captures_db = AsyncJsonDB(settings.CAPTURES_FILE, default_data=[])
     
     # 初始化组件
     app.state.browser_engine = BrowserEngine(pool_size=settings.BROWSER_POOL_SIZE)
@@ -29,6 +31,7 @@ async def lifespan(app: FastAPI):
     # 启动引擎与加载账号
     await app.state.account_pool.load()
     asyncio.create_task(app.state.browser_engine.start())
+    asyncio.create_task(garbage_collect_chats(app.state.qwen_client))
     
     yield
     
@@ -47,6 +50,10 @@ app.add_middleware(
 
 # 挂载路由
 app.include_router(v1_chat.router, prefix="/v1/chat", tags=["OpenAI Compatible"])
+app.include_router(anthropic.router, prefix="/anthropic/v1", tags=["Claude Compatible"])
+app.include_router(gemini.router, prefix="/v1beta", tags=["Gemini Compatible"])
+app.include_router(embeddings.router, prefix="/v1", tags=["Embeddings"])
+app.include_router(probes.router, tags=["Probes"])
 app.include_router(admin.router, prefix="/api/admin", tags=["Dashboard Admin"])
 
 if __name__ == "__main__":
