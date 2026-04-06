@@ -19,6 +19,52 @@ def ensure_dirs():
     LOGS_DIR.mkdir(exist_ok=True)
     (WORKSPACE_DIR / "data").mkdir(exist_ok=True)
 
+def check_and_install_dependencies():
+    print("⚡ [系统预检] 正在扫描底层铁壁的 Python 环境...")
+    python_exec = sys.executable
+    
+    # 安装后端依赖
+    try:
+        subprocess.check_call(
+            [python_exec, "-m", "pip", "install", "-r", "requirements.txt", "--quiet"],
+            cwd=BACKEND_DIR,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.STDOUT
+        )
+    except Exception as e:
+        print(f"⚠ [预检警告] 后端依赖安装异常: {e}")
+        
+    print("⚡ [系统预检] 正在下载并配置浏览器内核 (Camoufox)...")
+    try:
+        subprocess.check_call(
+            [python_exec, "-m", "camoufox", "fetch"],
+            cwd=WORKSPACE_DIR,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.STDOUT
+        )
+    except Exception as e:
+        print(f"⚠ [预检警告] 浏览器内核配置异常: {e}")
+
+    print("⚡ [系统预检] 正在扫描前端王座的 Node 环境...")
+    is_windows = (os.name == "nt")
+    npm_cmd = "npm install" if is_windows else ["npm", "install"]
+    
+    # 检查前端 node_modules 是否存在，如果不存在或为了安全起见，执行 npm install
+    try:
+        # 为了给用户一个清晰的进度，不吞噬这里的输出
+        print("  -> 正在执行 npm install (可能需要一点时间，请耐心等待)...")
+        subprocess.check_call(
+            npm_cmd,
+            cwd=FRONTEND_DIR,
+            shell=is_windows,
+            stdout=subprocess.DEVNULL, # 如果你想看npm安装过程可以改为 None，但通常比较吵
+            stderr=subprocess.STDOUT
+        )
+        print("✓ [预检通过] 前端依赖已就绪。")
+    except subprocess.CalledProcessError as e:
+        print(f"❌ [预检失败] 前端 npm install 失败，请检查是否安装了 Node.js: {e}")
+        sys.exit(1)
+    
 def start_backend() -> subprocess.Popen:
     print("⚡ 正在唤醒底层铁壁 (Backend)...")
     log_file = open(LOGS_DIR / "backend.log", "w", encoding="utf-8")
@@ -62,6 +108,7 @@ def start_frontend() -> subprocess.Popen:
 
 def main():
     ensure_dirs()
+    check_and_install_dependencies()
     
     backend_proc = start_backend()
     time.sleep(1) # 稍微错开启动时间
