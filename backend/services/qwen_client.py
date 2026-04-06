@@ -43,22 +43,51 @@ class QwenClient:
         """Verify token validity via direct HTTP (no browser page needed)."""
         if not token:
             return False
-            
+
         try:
             import httpx
             from backend.services.auth_resolver import BASE_URL
-            
-            async with httpx.AsyncClient(timeout=15, trust_env=False) as hc:
+
+            # 移除 trust_env=False，让 httpx 能够读取系统的 HTTP_PROXY/HTTPS_PROXY
+            async with httpx.AsyncClient(timeout=15) as hc:
                 resp = await hc.get(
                     f"{BASE_URL}/api/v1/auths/",
                     headers={"Authorization": f"Bearer {token}"},
                 )
             if resp.status_code != 200:
                 return False
-            return resp.json().get("role") == "user"
+            
+            # 增加对空响应/非 JSON 响应的容错，防止 GFW 拦截或代理返回假 200 OK 导致崩溃
+            try:
+                data = resp.json()
+                return data.get("role") == "user"
+            except Exception as e:
+                log.warning(f"[verify_token] JSON parse error (可能是被拦截或代理异常): {e}, status={resp.status_code}, text={resp.text[:100]}")
+                return False
         except Exception as e:
             log.warning(f"[verify_token] HTTP error: {e}")
             return False
+
+    async def list_models(self, token: str) -> list:
+        try:
+            import httpx
+            from backend.services.auth_resolver import BASE_URL
+
+            # 移除 trust_env=False 允许走系统代理
+            async with httpx.AsyncClient(timeout=10) as hc:
+                resp = await hc.get(
+                    f"{BASE_URL}/api/models",
+                    headers={"Authorization": f"Bearer {token}"},
+                )
+            if resp.status_code != 200:
+                return []
+            try:
+                return resp.json().get("data", [])
+            except Exception as e:
+                log.warning(f"[list_models] JSON parse error: {e}, status={resp.status_code}, text={resp.text[:100]}")
+                return []
+        except Exception:
+            return []
 
     def _build_payload(self, chat_id: str, model: str, content: str) -> dict:
         ts = int(time.time())
