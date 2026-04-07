@@ -67,6 +67,7 @@ async def chat_completions(request: Request):
                 # Buffer all events
                 thinking_chunks = []
                 answer_chunks = []
+                native_tc_chunks = {}
                 for evt in events:
                     if evt.get("type") != "delta":
                         continue
@@ -76,10 +77,40 @@ async def chat_completions(request: Request):
                         thinking_chunks.append(cont)
                     elif phase == "answer" and cont:
                         answer_chunks.append(cont)
+                    elif phase == "tool_call" and cont:
+                        tc_id = evt.get("extra", {}).get("tool_call_id", "tc_0")
+                        if tc_id not in native_tc_chunks:
+                            native_tc_chunks[tc_id] = {"name": "", "args": ""}
+                        try:
+                            chunk = json.loads(cont)
+                            if "name" in chunk:
+                                native_tc_chunks[tc_id]["name"] = chunk["name"]
+                            if "arguments" in chunk:
+                                native_tc_chunks[tc_id]["args"] += chunk["arguments"]
+                        except (json.JSONDecodeError, ValueError):
+                            native_tc_chunks[tc_id]["args"] += cont
                     if evt.get("status") == "finished" and phase == "answer":
                         break
-                        
+
                 answer_text = "".join(answer_chunks)
+                
+                if native_tc_chunks:
+                    log.info(f"[Native-TC] 收到原生工具调用事件: {list(native_tc_chunks.keys())}")
+                    tc_parts = []
+                    for tc_id, tc in native_tc_chunks.items():
+                        name = tc["name"]
+                        try:
+                            inp = json.loads(tc["args"]) if tc["args"] else {}
+                        except (json.JSONDecodeError, ValueError):
+                            inp = {"raw": tc["args"]}
+                        # 将原生调用转化为自定义的 ✿ACTION✿ 语法交由统一解析器处理
+                        tc_parts.append(f'✿ACTION✿\n{{"action": {json.dumps(name)}, "args": {json.dumps(inp, ensure_ascii=False)}}}\n✿END_ACTION✿')
+                    
+                    if not answer_text:
+                        answer_text = "\n\n".join(tc_parts)
+                    else:
+                        answer_text += "\n\n" + "\n\n".join(tc_parts)
+
                 reasoning_text = "".join(thinking_chunks)
                 
                 # Detect Qwen native tool call interception

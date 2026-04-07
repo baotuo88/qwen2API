@@ -108,8 +108,8 @@ async def anthropic_messages(request: Request):
                         break
 
                 answer_text = "".join(answer_chunks)
-                
-                if native_tc_chunks and not answer_text:
+
+                if native_tc_chunks:
                     log.info(f"[Native-TC] 收到原生工具调用事件: {list(native_tc_chunks.keys())}")
                     tc_parts = []
                     for tc_id, tc in native_tc_chunks.items():
@@ -120,7 +120,11 @@ async def anthropic_messages(request: Request):
                             inp = {"raw": tc["args"]}
                         # 将原生调用转化为自定义的 ✿ACTION✿ 语法交由统一解析器处理
                         tc_parts.append(f'✿ACTION✿\n{{"action": {json.dumps(name)}, "args": {json.dumps(inp, ensure_ascii=False)}}}\n✿END_ACTION✿')
-                    answer_text = "\n\n".join(tc_parts)
+                    
+                    if not answer_text:
+                        answer_text = "\n\n".join(tc_parts)
+                    else:
+                        answer_text += "\n\n" + "\n\n".join(tc_parts)
 
                 reasoning_text = "".join(thinking_chunks)
                 
