@@ -14,11 +14,17 @@ CUSTOM_TOOL_COMPAT_FEATURE_CONFIG = {
     "plugins_enabled": False,
 }
 
+CUSTOM_TOOL_LOW_LATENCY_OVERRIDES = {
+    "thinking_enabled": False,
+    "auto_thinking": False,
+}
+
 
 def build_chat_payload(chat_id: str, model: str, content: str, has_custom_tools: bool = False) -> dict:
     ts = int(time.time())
     feature_config = {
         **CUSTOM_TOOL_COMPAT_FEATURE_CONFIG,
+        **(CUSTOM_TOOL_LOW_LATENCY_OVERRIDES if has_custom_tools else {}),
         # Our Anthropic/OpenAI bridge relies on textual JSON/XML tool directives
         # that are parsed locally. Enabling Qwen native function_calling here causes
         # upstream interception such as `Tool Read/Bash does not exists.` for custom

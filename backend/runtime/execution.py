@@ -686,6 +686,12 @@ async def continue_after_retry_directive(*, client, execution, retry: RuntimeRet
 async def cleanup_runtime_resources(client, acc, chat_id: str | None) -> None:
     if acc is None:
         return
+    token = getattr(acc, "token", None)
     client.account_pool.release(acc)
-    if chat_id:
-        await client.delete_chat(acc.token, chat_id)
+    if chat_id and token:
+        async def _delete_chat_later() -> None:
+            try:
+                await client.delete_chat(token, chat_id)
+            except Exception as exc:
+                log.debug("[Cleanup] delete_chat failed chat_id=%s error=%s", chat_id, exc)
+        asyncio.create_task(_delete_chat_later())
