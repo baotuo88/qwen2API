@@ -156,7 +156,7 @@ async def _run_anthropic_attempt(
         attempt_index=stream_attempt,
         max_attempts=max_attempts,
         state=execution.state,
-        allow_after_visible_output=False,
+        allow_after_visible_output=True,
     )
     return execution, retry
 
@@ -253,7 +253,7 @@ async def anthropic_messages(request: Request):
                             attempt_index=stream_attempt,
                             max_attempts=max_attempts,
                             state=execution.state,
-                            allow_after_visible_output=False,
+                            allow_after_visible_output=True,
                         )
                         if retry.retry:
                             await cleanup_runtime_resources(client, execution.acc, execution.chat_id)

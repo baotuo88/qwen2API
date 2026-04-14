@@ -525,8 +525,10 @@ def evaluate_retry_directive(
     if attempt_index >= max_attempts - 1:
         return RuntimeRetryDirective(retry=False, next_prompt=current_prompt)
 
+    can_retry_after_output = allow_after_visible_output or not state.emitted_visible_output
+
     if state.blocked_tool_names and request.tools:
-        if state.emitted_visible_output and not allow_after_visible_output:
+        if not can_retry_after_output:
             return RuntimeRetryDirective(retry=False, next_prompt=current_prompt)
         blocked_name = normalize_tool_name(state.blocked_tool_names[0], request.tool_names)
         return RuntimeRetryDirective(
@@ -542,7 +544,7 @@ def evaluate_retry_directive(
         directive: RuntimeToolDirective | None = None
         if state.answer_text:
             saw_contract_markup = should_retry_textual_tool_contract(state.answer_text)
-            if saw_contract_markup and not state.emitted_visible_output:
+            if saw_contract_markup and can_retry_after_output:
                 if has_invalid_textual_tool_contract(state.answer_text):
                     fallback_tool_name = request.tool_names[0] if request.tool_names else "tool"
                     return RuntimeRetryDirective(
@@ -582,7 +584,7 @@ def evaluate_retry_directive(
                         first_tool.get("name", ""),
                         first_tool.get("input", {}),
                     ) >= 1
-                if repeated_same_tool and not state.emitted_visible_output:
+                if repeated_same_tool and can_retry_after_output:
                     force_text = (
                         f"[MANDATORY NEXT STEP]: You already called {first_tool.get('name')} with the same input. "
                         "Do NOT repeat the same tool call. "
@@ -594,7 +596,7 @@ def evaluate_retry_directive(
                 first_tool
                 and first_tool.get("name") == "Read"
                 and has_recent_unchanged_read_result(history_messages)
-                and not state.emitted_visible_output
+                and can_retry_after_output
             ):
                 force_text = (
                     "[MANDATORY NEXT STEP]: You just received 'Unchanged since last read'. "
@@ -607,7 +609,7 @@ def evaluate_retry_directive(
                 first_tool
                 and first_tool.get("name") == "WebSearch"
                 and has_recent_search_no_results(history_messages)
-                and not state.emitted_visible_output
+                and can_retry_after_output
             ):
                 force_text = (
                     "[MANDATORY NEXT STEP]: The last WebSearch returned no results. "

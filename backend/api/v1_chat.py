@@ -116,7 +116,7 @@ async def chat_completions(request: Request):
                         history_messages=history_messages,
                         max_attempts=settings.MAX_RETRIES + (1 if standard_request.tools else 0),
                         usage_delta_factory=build_usage_delta_factory(prompt),
-                        allow_after_visible_output=False,
+                        allow_after_visible_output=True,
                         capture_events=False,
                         on_delta=delta_handler,
                     )
@@ -150,7 +150,7 @@ async def chat_completions(request: Request):
                 history_messages=history_messages,
                 max_attempts=settings.MAX_RETRIES + (1 if standard_request.tools else 0),
                 usage_delta_factory=build_usage_delta_factory(prompt),
-                allow_after_visible_output=False,
+                allow_after_visible_output=True,
             )
             execution = result.execution
 
